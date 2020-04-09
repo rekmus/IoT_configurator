@@ -11,6 +11,178 @@
 
 
 /* --------------------------------------------------------------------------------
+   Render main menu
+-------------------------------------------------------------------------------- */
+static void main_menu(int ci)
+{
+    char lnk_home[256]="<a href=\"/\">Home</a>";
+    char lnk_settings[256]="<a href=\"/settings\">Settings</a>";
+    char lnk_website[256];
+    snprintf(lnk_website, 255, "<a href=\"https://%s\">Website</a>", APP_DOMAIN);
+
+    if ( REQ("") )
+        COPY(lnk_home, "<b>Home</b>", 255);
+    else if ( REQ("settings") )
+        COPY(lnk_settings, "<b>Settings</b>", 255);
+
+    OUT("<p>");
+    OUT(lnk_home);
+    OUT(" | ");
+    OUT(lnk_settings);
+    OUT(" | ");
+    OUT(lnk_website);
+    OUT("</p>");
+}
+
+
+/* --------------------------------------------------------------------------------
+   Render HTML header
+-------------------------------------------------------------------------------- */
+static void header(int ci)
+{
+    OUT("<!DOCTYPE html>");
+    OUT("<html>");
+    OUT("<head>");
+    OUT("<meta charset=\"UTF-8\">");
+    OUT("<title>%s</title>", APP_WEBSITE);
+//    OUT("<meta name=\"description\" content=\"%s\">", APP_DESCRIPTION);
+//    OUT("<meta name=\"keywords\" content=\"%s\">", APP_KEYWORDS);
+    OUT("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
+//    OUT("<link rel=\"stylesheet\" type=\"text/css\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css\">");
+    OUT("<link rel=\"stylesheet\" type=\"text/css\" href=\"/silgy.css\">");
+    OUT("<link rel=\"stylesheet\" type=\"text/css\" href=\"/style.css\">");
+//    OUT("<script src=\"/silgy.js\"></script>");
+    OUT("</head>");
+
+    OUT("<body>");
+    OUT("<h1>%s</h1>", APP_WEBSITE);
+
+    main_menu(ci);
+}
+
+
+/* --------------------------------------------------------------------------------
+   Render HTML footer
+-------------------------------------------------------------------------------- */
+static void footer(int ci)
+{
+    OUT_HTML_FOOTER;
+    RES_DONT_CACHE;
+}
+
+
+/* --------------------------------------------------------------------------
+   Show error message if present in URI
+-------------------------------------------------------------------------- */
+static int check_error_msg(int ci)
+{
+    int msg;
+
+    if ( !QSI("msg", &msg) || msg==OK ) return OK;
+
+    OUT("<p class=\"ct m25 brd\">%s</p>", silgy_message(msg));
+
+    return msg;
+}
+
+
+/* --------------------------------------------------------------------------------
+   Render landing page
+-------------------------------------------------------------------------------- */
+static void render_landing(int ci)
+{
+    header(ci);
+    OUT("<p class=m20>Welcome to %s!</p>", APP_WEBSITE);
+    footer(ci);
+}
+
+
+/* --------------------------------------------------------------------------------
+   Render settings page
+-------------------------------------------------------------------------------- */
+static void render_settings(int ci)
+{
+    header(ci);
+
+    OUT("<h2>Settings</h2>");
+    check_error_msg(ci);
+
+    OUT("<form action=\"save_settings\" method=\"POST\">");
+    OUT("<table%s>", REQ_DSK?"":" class=w100p");
+    if ( REQ_DSK )
+    {
+        OUT("<tr><td class=rt>String value:</td><td><input name=\"string1\" value=\"%s\" autofocus></td></tr>", AUS.set_string1);
+        OUT("<tr><td class=rt>Integer value:</td><td><input name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
+        OUT("<tr><td class=rt>Float value:</td><td><input name=\"float1\" value=\"%f\"></td></tr>", AUS.set_float1);
+        OUT("<tr><td colspan=2>&nbsp;</td></tr>");
+        OUT("<tr><td></td><td><input type=\"submit\" value=\"Save settings\"></td></tr>");
+    }
+    else    /* phone */
+    {
+        OUT("<tr><td>String value:</td></tr>");
+        OUT("<tr><td><input class=w100p name=\"string1\" value=\"%s\" autofocus></td></tr>", AUS.set_string1);
+        OUT("<tr><td class=pt>Integer value:</td></tr>");
+        OUT("<tr><td><input type=\"number\" name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
+        OUT("<tr><td class=pt>Float value:</td></tr>");
+        OUT("<tr><td><input type=\"number\" name=\"float1\" value=\"%f\"></td></tr>", AUS.set_float1);
+        OUT("<tr><td>&nbsp;</td></tr>");
+        OUT("<tr><td><input type=\"submit\" value=\"Save settings\"></td></tr>");
+    }
+    OUT("</table>");
+    OUT("</form>");
+
+    footer(ci);
+}
+
+
+/* --------------------------------------------------------------------------------
+   Save settings to a file
+-------------------------------------------------------------------------------- */
+static int save_settings(int ci)
+{
+    // read query string values
+
+    QSVAL qsval;
+
+    if ( QS("string1", qsval) )
+        COPY(AUS.set_string1, qsval, SET_STRING1_LEN);
+
+    QSI("int1", &AUS.set_int1);
+    QSF("float1", &AUS.set_float1);
+
+    // render JSON
+
+    JSON j={0};
+
+    JSON_ADD_STR(j, "string1", AUS.set_string1);
+    JSON_ADD_INT(j, "int1", AUS.set_int1);
+    JSON_ADD_FLOAT(j, "float1", AUS.set_float1);
+
+    char data[JSON_BUFSIZE];
+
+    COPY(data, JSON_TO_STRING_PRETTY(j), JSON_BUFSIZE-1);
+
+    // save JSON to a file
+
+    FILE *fd;
+
+    if ( NULL == (fd=fopen(SETTINGS_FILE, "w")) )
+    {
+        WAR("Couldn't open %s\n", SETTINGS_FILE);
+        return ERR_INT_SERVER_ERROR;
+    }
+    else    /* OK */
+    {
+        fwrite(data, strlen(data), 1, fd);
+    }
+
+    fclose(fd);
+
+    return OK;
+}
+
+
+/* --------------------------------------------------------------------------------
    Called after parsing HTTP request header
    ------------------------------
    This is the main entry point for a request
@@ -20,42 +192,20 @@
 -------------------------------------------------------------------------------- */
 void silgy_app_main(int ci)
 {
-    if ( REQ("") )  // landing page
+    int ret=OK;
+
+    if ( REQ("settings") )
     {
-        OUT_HTML_HEADER;
-
-        OUT("<h1>%s</h1>", APP_WEBSITE);
-        OUT("<h2>Welcome to my web app!</h2>");
-
-        if ( REQ_DSK )
-            OUT("<p>You're on desktop.</p>");
-        else  /* REQ_MOB */
-            OUT("<p>You're on the phone.</p>");
-
-        OUT("<p>Click <a href=\"welcome\">here</a> to try my welcoming bot.</p>");
-
-        OUT_HTML_FOOTER;
+        render_settings(ci);
     }
-    else if ( REQ("welcome") )  // welcoming bot
+    else if ( REQ("save_settings") )
     {
-        OUT_HTML_HEADER;
-        OUT("<h1>%s</h1>", APP_WEBSITE);
-
-        OUT("<p>Please enter your name:</p>");
-        OUT("<form action=\"welcome\"><input name=\"firstname\" autofocus> <input type=\"submit\" value=\"Run\"></form>");
-
-        QSVAL qs_firstname;   // query string value
-
-        if ( QS("firstname", qs_firstname) )    // if present, bid welcome
-            OUT("<p>Welcome %s, my dear friend!</p>", qs_firstname);
-
-        OUT("<p><a href=\"/\">Back to landing page</a></p>");
-
-        OUT_HTML_FOOTER;
+        ret = save_settings(ci);
+        RES_LOCATION("/settings?msg=%d", ret==OK?MSG_SETTINGS_SAVED:ret);
     }
-    else  // page not found
+    else
     {
-        RES_STATUS(404);
+        render_landing(ci);
     }
 }
 
@@ -70,6 +220,8 @@ void silgy_app_main(int ci)
 -------------------------------------------------------------------------------- */
 bool silgy_app_init(int argc, char *argv[])
 {
+    silgy_add_message(MSG_SETTINGS_SAVED, "EN-US", "Settings have been saved");
+
     return true;
 }
 
@@ -85,6 +237,44 @@ bool silgy_app_init(int argc, char *argv[])
 -------------------------------------------------------------------------------- */
 bool silgy_app_session_init(int ci)
 {
+    // read settings from a file
+
+    FILE *fd;
+
+    if ( NULL == (fd=fopen(SETTINGS_FILE, "r")) )
+    {
+        WAR("Couldn't open %s\n", SETTINGS_FILE);
+//        return false;
+        return true;
+    }
+
+    fseek(fd, 0, SEEK_END);     /* determine the file size */
+    unsigned len = ftell(fd);
+    rewind(fd);
+
+    char *data;
+
+    if ( NULL == (data=(char*)malloc(len+1)) )
+    {
+        ERR("Couldn't allocate %u bytes for %s", len, SETTINGS_FILE);
+        fclose(fd);
+        return false;
+    }
+
+    fread(data, len, 1, fd);
+    *(data+len) = EOS;
+
+    fclose(fd);
+
+    JSON j={0};
+    JSON_FROM_STRING(j, data);
+
+    COPY(AUS.set_string1, JSON_GET_STR(j, "string1"), SET_STRING1_LEN);
+    AUS.set_int1 = JSON_GET_INT(j, "int1");
+    AUS.set_float1 = JSON_GET_FLOAT(j, "float1");
+
+    free(data);
+
     return true;
 }
 
