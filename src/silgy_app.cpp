@@ -19,6 +19,7 @@ static void main_menu(int ci)
     char lnk_settings[256]="<a href=\"/settings\">Settings</a>";
     char lnk_website[256];
     snprintf(lnk_website, 255, "<a href=\"https://%s\">Website</a>", APP_DOMAIN);
+    char lnk_logout[256]="<a href=\"/logout\">Logout</a>";
 
     if ( REQ("") )
         COPY(lnk_home, "<b>Home</b>", 255);
@@ -26,11 +27,19 @@ static void main_menu(int ci)
         COPY(lnk_settings, "<b>Settings</b>", 255);
 
     OUT("<p>");
+
     OUT(lnk_home);
     OUT(" | ");
     OUT(lnk_settings);
     OUT(" | ");
     OUT(lnk_website);
+
+    if ( AUS.authenticated )
+    {
+        OUT(" | ");
+        OUT(lnk_logout);
+    }
+
     OUT("</p>");
 }
 
@@ -67,7 +76,6 @@ static void header(int ci)
 static void footer(int ci)
 {
     OUT_HTML_FOOTER;
-    RES_DONT_CACHE;
 }
 
 
@@ -97,21 +105,82 @@ static void render_landing(int ci)
 }
 
 
+/* --------------------------------------------------------------------------
+   Render page
+-------------------------------------------------------------------------- */
+static void render_login(int ci)
+{
+    header(ci);
+    OUT("<h2>Login</h2>");
+    check_error_msg(ci);
+
+    OUT("<form action=\"do_login\" method=\"POST\" novalidate>");
+
+    OUT("<table%s>", REQ_DSK?"":" class=w100p");
+
+    if ( REQ_DSK )
+    {
+        OUT("<tr><td class=rt>Login:</td><td><input name=\"login\" autofocus></td></tr>");
+        OUT("<tr><td class=rt>Password:</td><td><input type=\"password\" name=\"passwd\"></td></tr>");
+        OUT("<tr><td colspan=2>&nbsp;</td></tr>");
+        OUT("<tr><td></td><td><input type=\"submit\" value=\"Login\"></td></tr>");
+    }
+    else    /* phone */
+    {
+        OUT("<tr><td>Login:</td></tr>");
+        OUT("<tr><td><input class=w100p name=\"login\" autofocus></td></tr>");
+        OUT("<tr><td class=pt>Password:</td></tr>");
+        OUT("<tr><td><input class=w100p type=\"password\" name=\"passwd\"></td></tr>");
+        OUT("<tr><td>&nbsp;</td></tr>");
+        OUT("<tr><td><input type=\"submit\" value=\"Login\"></td></tr>");
+    }
+
+    OUT("</table>");
+
+    OUT("</form>");
+
+    footer(ci);
+}
+
+
+/* --------------------------------------------------------------------------
+   Login
+-------------------------------------------------------------------------- */
+static int do_login(int ci)
+{
+    QSVAL qsval;
+    char passwd[PASSWORD_LEN+1];
+
+    if ( QS("passwd", qsval) )
+        COPY(passwd, qsval, PASSWORD_LEN);
+
+    if ( 0==strcmp(passwd, AUS.password) )
+    {
+        AUS.authenticated = true;
+        return OK;
+    }
+
+    return ERR_UNAUTHORIZED;
+}
+
+
 /* --------------------------------------------------------------------------------
    Render settings page
 -------------------------------------------------------------------------------- */
 static void render_settings(int ci)
 {
     header(ci);
-
     OUT("<h2>Settings</h2>");
     check_error_msg(ci);
 
-    OUT("<form action=\"save_settings\" method=\"POST\">");
+    OUT("<form action=\"save_settings\" method=\"POST\" novalidate>");
+
     OUT("<table%s>", REQ_DSK?"":" class=w100p");
+
     if ( REQ_DSK )
     {
-        OUT("<tr><td class=rt>String value:</td><td><input name=\"string1\" value=\"%s\" autofocus></td></tr>", AUS.set_string1);
+        OUT("<tr><td class=rt>Password:</td><td><input name=\"password\" value=\"%s\" autofocus></td></tr>", AUS.password);
+        OUT("<tr><td class=rt>String value:</td><td><input name=\"string1\" value=\"%s\"></td></tr>", AUS.set_string1);
         OUT("<tr><td class=rt>Integer value:</td><td><input name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
         OUT("<tr><td class=rt>Float value:</td><td><input name=\"float1\" value=\"%f\"></td></tr>", AUS.set_float1);
         OUT("<tr><td colspan=2>&nbsp;</td></tr>");
@@ -119,8 +188,10 @@ static void render_settings(int ci)
     }
     else    /* phone */
     {
-        OUT("<tr><td>String value:</td></tr>");
-        OUT("<tr><td><input class=w100p name=\"string1\" value=\"%s\" autofocus></td></tr>", AUS.set_string1);
+        OUT("<tr><td class=pt>Password:</td></tr>");
+        OUT("<tr><td><input class=w100p name=\"password\" value=\"%s\" autofocus></td></tr>", AUS.password);
+        OUT("<tr><td class=pt>String value:</td></tr>");
+        OUT("<tr><td><input class=w100p name=\"string1\" value=\"%s\"></td></tr>", AUS.set_string1);
         OUT("<tr><td class=pt>Integer value:</td></tr>");
         OUT("<tr><td><input type=\"number\" name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
         OUT("<tr><td class=pt>Float value:</td></tr>");
@@ -128,7 +199,9 @@ static void render_settings(int ci)
         OUT("<tr><td>&nbsp;</td></tr>");
         OUT("<tr><td><input type=\"submit\" value=\"Save settings\"></td></tr>");
     }
+
     OUT("</table>");
+
     OUT("</form>");
 
     footer(ci);
@@ -144,6 +217,9 @@ static int save_settings(int ci)
 
     QSVAL qsval;
 
+    if ( QS("password", qsval) )
+        COPY(AUS.password, qsval, PASSWORD_LEN);
+
     if ( QS("string1", qsval) )
         COPY(AUS.set_string1, qsval, SET_STRING1_LEN);
 
@@ -154,6 +230,7 @@ static int save_settings(int ci)
 
     JSON j={0};
 
+    JSON_ADD_STR(j, "password", AUS.password);
     JSON_ADD_STR(j, "string1", AUS.set_string1);
     JSON_ADD_INT(j, "int1", AUS.set_int1);
     JSON_ADD_FLOAT(j, "float1", AUS.set_float1);
@@ -194,19 +271,47 @@ void silgy_app_main(int ci)
 {
     int ret=OK;
 
-    if ( REQ("settings") )
+    if ( REQ("login") )
     {
-        render_settings(ci);
+        render_login(ci);
+    }
+    else if ( REQ("do_login") )
+    {
+        ret = do_login(ci);
+
+        if ( ret == OK )
+            RES_LOCATION("/settings");
+        else
+            RES_LOCATION("/login?msg=%d", ret);
+    }
+    else if ( REQ("settings") )
+    {
+        if ( AUS.authenticated )
+            render_settings(ci);
+        else
+            RES_LOCATION("/login");
     }
     else if ( REQ("save_settings") )
     {
-        ret = save_settings(ci);
-        RES_LOCATION("/settings?msg=%d", ret==OK?MSG_SETTINGS_SAVED:ret);
+        if ( AUS.authenticated )
+        {
+            ret = save_settings(ci);
+            RES_LOCATION("/settings?msg=%d", ret==OK?MSG_SETTINGS_SAVED:ret);
+        }
+        else
+            RES_LOCATION("/login");
+    }
+    else if ( REQ("logout") )
+    {
+        AUS.authenticated = false;
+        RES_LOCATION("/");
     }
     else
     {
         render_landing(ci);
     }
+
+    RES_DONT_CACHE;
 }
 
 
@@ -269,6 +374,7 @@ bool silgy_app_session_init(int ci)
     JSON j={0};
     JSON_FROM_STRING(j, data);
 
+    COPY(AUS.password, JSON_GET_STR(j, "password"), PASSWORD_LEN);
     COPY(AUS.set_string1, JSON_GET_STR(j, "string1"), SET_STRING1_LEN);
     AUS.set_int1 = JSON_GET_INT(j, "int1");
     AUS.set_float1 = JSON_GET_FLOAT(j, "float1");
