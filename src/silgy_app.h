@@ -19,6 +19,9 @@
 #define MEM_TINY
 #define ASYNC_EXCLUDE_AUSES
 
+#define DUMP
+
+
 #define SETTINGS_FILE                   "/cpp/iot/settings.json"
 #define PASSWORD_FILE                   "/cpp/iot/passwd.txt"
 
@@ -30,15 +33,12 @@
 #define SET_STRING1_LEN                 255
 
 
+
 /* app user session */
 
 typedef struct {
-    /* devive settings */
+    char  login[LOGIN_LEN+1];
     char  password[PASSWORD_LEN+1];
-    char  set_string1[SET_STRING1_LEN+1];
-    int   set_int1;
-    float set_float1;
-    /* end of settings */
     bool  authenticated;
 } ausession_t;
 

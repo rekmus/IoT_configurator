@@ -10,6 +10,33 @@
 #include <silgy.h>
 
 
+#define TYPE_STRING 's'
+#define TYPE_INT    'i'
+#define TYPE_FLOAT  'f'
+#define TYPE_DOUBLE 'd'
+#define TYPE_BOOL   'b'
+
+/*
+   Add settings to the array below.
+   len is for strings only.
+   Do not remove the last line with empty values.
+*/
+
+static struct {
+    char label[64];
+    char name[64];
+    char type;
+    short len;
+    char *value;
+    } M_settings[] = {
+        {"Some string", "some_string", TYPE_STRING, 255, NULL},
+        {"Some number", "some_number", TYPE_INT, 0, NULL},
+        {"Some float", "some_float", TYPE_FLOAT, 0, NULL},
+        {"Some bool", "some_bool", TYPE_BOOL, 0, NULL},
+        {"", "", 0, 0, NULL}
+    };
+
+
 /* --------------------------------------------------------------------------------
    Render main menu
 -------------------------------------------------------------------------------- */
@@ -180,9 +207,21 @@ static void render_settings(int ci)
     if ( REQ_DSK )
     {
         OUT("<tr><td class=rt>Password:</td><td><input name=\"password\" value=\"%s\" autofocus></td></tr>", AUS.password);
-        OUT("<tr><td class=rt>String value:</td><td><input name=\"string1\" value=\"%s\"></td></tr>", AUS.set_string1);
-        OUT("<tr><td class=rt>Integer value:</td><td><input name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
-        OUT("<tr><td class=rt>Float value:</td><td><input name=\"float1\" value=\"%f\"></td></tr>", AUS.set_float1);
+
+        for ( int i=0; M_settings[i].type!=0; ++i )
+        {
+            if ( M_settings[i].type == TYPE_STRING )
+                OUT("<tr><td class=rt>%s:</td><td><input name=\"%s\" value=\"%s\"></td></tr>", M_settings[i].label, M_settings[i].name, M_settings[i].value);
+            else if ( M_settings[i].type == TYPE_INT )
+                OUT("<tr><td class=rt>%s:</td><td><input name=\"%s\" value=\"%d\"></td></tr>", M_settings[i].label, M_settings[i].name, *(int*)M_settings[i].value);
+            else if ( M_settings[i].type == TYPE_FLOAT )
+                OUT("<tr><td class=rt>%s:</td><td><input name=\"%s\" value=\"%f\"></td></tr>", M_settings[i].label, M_settings[i].name, *(float*)M_settings[i].value);
+            else if ( M_settings[i].type == TYPE_DOUBLE )
+                OUT("<tr><td class=rt>%s:</td><td><input name=\"%s\" value=\"%lf\"></td></tr>", M_settings[i].label, M_settings[i].name, *(double*)M_settings[i].value);
+            else if ( M_settings[i].type == TYPE_BOOL )
+                OUT("<tr><td class=rt>%s:</td><td><input name=\"%s\" value=\"%d\"></td></tr>", M_settings[i].label, M_settings[i].name, *(bool*)M_settings[i].value);
+        }
+
         OUT("<tr><td colspan=2>&nbsp;</td></tr>");
         OUT("<tr><td></td><td><input type=\"submit\" value=\"Save settings\"></td></tr>");
     }
@@ -190,12 +229,36 @@ static void render_settings(int ci)
     {
         OUT("<tr><td class=pt>Password:</td></tr>");
         OUT("<tr><td><input class=w100p name=\"password\" value=\"%s\" autofocus></td></tr>", AUS.password);
-        OUT("<tr><td class=pt>String value:</td></tr>");
-        OUT("<tr><td><input class=w100p name=\"string1\" value=\"%s\"></td></tr>", AUS.set_string1);
-        OUT("<tr><td class=pt>Integer value:</td></tr>");
-        OUT("<tr><td><input type=\"number\" name=\"int1\" value=\"%d\"></td></tr>", AUS.set_int1);
-        OUT("<tr><td class=pt>Float value:</td></tr>");
-        OUT("<tr><td><input type=\"number\" name=\"float1\" value=\"%f\"></td></tr>", AUS.set_float1);
+
+        for ( int i=0; M_settings[i].type!=0; ++i )
+        {
+            if ( M_settings[i].type == TYPE_STRING )
+            {
+                OUT("<tr><td class=pt>%s:</td></tr>", M_settings[i].label);
+                OUT("<tr><td><input class=w100p name=\"%s\" value=\"%s\"></td></tr>", M_settings[i].name, M_settings[i].value);
+            }
+            else if ( M_settings[i].type == TYPE_INT )
+            {
+                OUT("<tr><td class=pt>%s:</td></tr>", M_settings[i].label);
+                OUT("<tr><td><input type=\"number\" name=\"%s\" value=\"%d\"></td></tr>", M_settings[i].name, *(int*)M_settings[i].value);
+            }
+            else if ( M_settings[i].type == TYPE_FLOAT )
+            {
+                OUT("<tr><td class=pt>%s:</td></tr>", M_settings[i].label);
+                OUT("<tr><td><input type=\"number\" name=\"%s\" value=\"%f\"></td></tr>", M_settings[i].name, *(float*)M_settings[i].value);
+            }
+            else if ( M_settings[i].type == TYPE_DOUBLE )
+            {
+                OUT("<tr><td class=pt>%s:</td></tr>", M_settings[i].label);
+                OUT("<tr><td><input type=\"number\" name=\"%s\" value=\"%lf\"></td></tr>", M_settings[i].name, *(double*)M_settings[i].value);
+            }
+            else if ( M_settings[i].type == TYPE_BOOL )
+            {
+                OUT("<tr><td class=pt>%s:</td></tr>", M_settings[i].label);
+                OUT("<tr><td><input type=\"number\" name=\"%s\" value=\"%d\"></td></tr>", M_settings[i].name, *(bool*)M_settings[i].value);
+            }
+        }
+
         OUT("<tr><td>&nbsp;</td></tr>");
         OUT("<tr><td><input type=\"submit\" value=\"Save settings\"></td></tr>");
     }
@@ -220,20 +283,52 @@ static int save_settings(int ci)
     if ( QS("password", qsval) )
         COPY(AUS.password, qsval, PASSWORD_LEN);
 
-    if ( QS("string1", qsval) )
-        COPY(AUS.set_string1, qsval, SET_STRING1_LEN);
+    for ( int i=0; M_settings[i].type!=0; ++i )
+    {
+        if ( M_settings[i].type == TYPE_STRING )
+        {
+            if ( QS(M_settings[i].name, qsval) )
+                COPY(M_settings[i].value, qsval, M_settings[i].len);
+        }
+        else if ( M_settings[i].type == TYPE_INT )
+        {
+            QSI(M_settings[i].name, (int*)M_settings[i].value);
+        }
+        else if ( M_settings[i].type == TYPE_FLOAT )
+        {
+            QSF(M_settings[i].name, (float*)M_settings[i].value);
+        }
+        else if ( M_settings[i].type == TYPE_DOUBLE )
+        {
+            QSD(M_settings[i].name, (double*)M_settings[i].value);
+        }
+        else if ( M_settings[i].type == TYPE_BOOL )
+        {
+            QSB(M_settings[i].name, (bool*)M_settings[i].value);
+        }
+    }
 
-    QSI("int1", &AUS.set_int1);
-    QSF("float1", &AUS.set_float1);
+//    DBG("some_float = %f", *(float*)M_settings[2].value);
 
     // render JSON
 
     JSON j={0};
 
     JSON_ADD_STR(j, "password", AUS.password);
-    JSON_ADD_STR(j, "string1", AUS.set_string1);
-    JSON_ADD_INT(j, "int1", AUS.set_int1);
-    JSON_ADD_FLOAT(j, "float1", AUS.set_float1);
+
+    for ( int i=0; M_settings[i].type!=0; ++i )
+    {
+        if ( M_settings[i].type == TYPE_STRING )
+            JSON_ADD_STR(j, M_settings[i].name, M_settings[i].value);
+        else if ( M_settings[i].type == TYPE_INT )
+            JSON_ADD_INT(j, M_settings[i].name, *(int*)M_settings[i].value);
+        else if ( M_settings[i].type == TYPE_FLOAT )
+            JSON_ADD_FLOAT(j, M_settings[i].name, *(float*)M_settings[i].value);
+        else if ( M_settings[i].type == TYPE_DOUBLE )
+            JSON_ADD_DOUBLE(j, M_settings[i].name, *(double*)M_settings[i].value);
+        else if ( M_settings[i].type == TYPE_BOOL )
+            JSON_ADD_BOOL(j, M_settings[i].name, *(bool*)M_settings[i].value);
+    }
 
     char data[JSON_BUFSIZE];
 
@@ -361,7 +456,7 @@ bool silgy_app_session_init(int ci)
 
     if ( NULL == (data=(char*)malloc(len+1)) )
     {
-        ERR("Couldn't allocate %u bytes for %s", len, SETTINGS_FILE);
+        ERR("Couldn't allocate %u bytes for %s", len+1, SETTINGS_FILE);
         fclose(fd);
         return false;
     }
@@ -374,12 +469,67 @@ bool silgy_app_session_init(int ci)
     JSON j={0};
     JSON_FROM_STRING(j, data);
 
-    COPY(AUS.password, JSON_GET_STR(j, "password"), PASSWORD_LEN);
-    COPY(AUS.set_string1, JSON_GET_STR(j, "string1"), SET_STRING1_LEN);
-    AUS.set_int1 = JSON_GET_INT(j, "int1");
-    AUS.set_float1 = JSON_GET_FLOAT(j, "float1");
-
     free(data);
+
+    COPY(AUS.password, JSON_GET_STR(j, "password"), PASSWORD_LEN);
+
+    for ( int i=0; M_settings[i].type!=0; ++i )
+    {
+        if ( M_settings[i].type == TYPE_STRING )
+        {
+            if ( NULL == (M_settings[i].value=(char*)malloc(M_settings[i].len+1)) )
+            {
+                ERR("Couldn't allocate %d bytes for %s", M_settings[i].len+1, M_settings[i].name);
+                return false;
+            }
+
+            COPY(M_settings[i].value, JSON_GET_STR(j, M_settings[i].name), M_settings[i].len);
+        }
+        else if ( M_settings[i].type == TYPE_INT )
+        {
+            if ( NULL == (M_settings[i].value=(char*)malloc(sizeof(int))) )
+            {
+                ERR("Couldn't allocate %d bytes for %s", sizeof(int), M_settings[i].name);
+                return false;
+            }
+
+            int tmp = JSON_GET_INT(j, M_settings[i].name);
+            memcpy(M_settings[i].value, (char*)&tmp, sizeof(int));
+        }
+        else if ( M_settings[i].type == TYPE_FLOAT )
+        {
+            if ( NULL == (M_settings[i].value=(char*)malloc(sizeof(float))) )
+            {
+                ERR("Couldn't allocate %d bytes for %s", sizeof(float), M_settings[i].name);
+                return false;
+            }
+
+            float tmp = JSON_GET_FLOAT(j, M_settings[i].name);
+            memcpy(M_settings[i].value, (char*)&tmp, sizeof(float));
+        }
+        else if ( M_settings[i].type == TYPE_DOUBLE )
+        {
+            if ( NULL == (M_settings[i].value=(char*)malloc(sizeof(double))) )
+            {
+                ERR("Couldn't allocate %d bytes for %s", sizeof(double), M_settings[i].name);
+                return false;
+            }
+
+            double tmp = JSON_GET_DOUBLE(j, M_settings[i].name);
+            memcpy(M_settings[i].value, (char*)&tmp, sizeof(double));
+        }
+        else if ( M_settings[i].type == TYPE_BOOL )
+        {
+            if ( NULL == (M_settings[i].value=(char*)malloc(sizeof(bool))) )
+            {
+                ERR("Couldn't allocate %d bytes for %s", sizeof(bool), M_settings[i].name);
+                return false;
+            }
+
+            bool tmp = JSON_GET_BOOL(j, M_settings[i].name);
+            memcpy(M_settings[i].value, (char*)&tmp, sizeof(bool));
+        }
+    }
 
     return true;
 }
